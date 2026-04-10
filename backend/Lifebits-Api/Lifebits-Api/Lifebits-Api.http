@@ -1,0 +1,6 @@
+@Lifebits_Api_HostAddress = http://localhost:5258
+
+GET {{Lifebits_Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
