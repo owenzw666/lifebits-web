@@ -3,7 +3,6 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 
 function App() {
-
   const mapContainer = useRef<HTMLDivElement | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const mapRef = useRef<maplibregl.Map | null>(null);
@@ -17,7 +16,7 @@ function App() {
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
   const [notes, setNotes] = useState([]);
-const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   const loadNotes = async () => {
     const res = await fetch("https://localhost:44359/api/notes");
@@ -51,14 +50,119 @@ const [selectedId, setSelectedId] = useState<number | null>(null);
 
     data.forEach((note: any) => {
       const popup = new maplibregl.Popup({ offset: 25 }).setHTML(`
-      <h3>${note.title}</h3>
-      <p>${note.content}</p>
-    `);
+        <div id="popup-${note.id}" style="min-width:180px">
+    
+          <div class="view-mode">
+          <h3>${note.title}</h3>
+          <p>${note.content}</p>
+          <button style="background:#007bff;color:white;border:none;padding:4px 8px;border-radius:4px;" id="edit-${note.id}">Edit</button>
+          <button style="background:#dc3545;color:white;border:none;padding:4px 8px;border-radius:4px;" id="delete-${note.id}">Delete</button>
+          </div>
 
-      const marker = new maplibregl.Marker()
+          <div class="edit-mode" style="display:none">
+          <input id="title-${note.id}" value="${note.title}" />
+          <textarea id="content-${note.id}">${note.content}</textarea>
+          <button id="save-${note.id}">Save</button>
+          <button id="cancel-${note.id}">Cancel</button>
+          </div>
+
+        </div>
+      `);
+
+      const el = document.createElement("div");
+
+      el.style.width = "24px";
+      el.style.height = "24px";
+      el.style.backgroundColor = "#007bff";
+      el.style.borderRadius = "50%";
+      el.style.border = "3px solid white";
+      el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.3)";
+      el.style.cursor = "pointer";
+      el.style.display = "flex";
+      el.style.alignItems = "center";
+      el.style.justifyContent = "center";
+
+      // 内部小点
+      const inner = document.createElement("div");
+      inner.style.width = "6px";
+      inner.style.height = "6px";
+      inner.style.backgroundColor = "white";
+      inner.style.borderRadius = "50%";
+
+      el.appendChild(inner);
+
+      const marker = new maplibregl.Marker({ element: el })
         .setLngLat([note.longitude, note.latitude])
         .setPopup(popup)
         .addTo(mapRef.current!);
+
+      marker.setPopup(popup);
+
+      popup.on("open", () => {
+        const container = document.getElementById(`popup-${note.id}`);
+        if (!container) return;
+
+        const view = container.querySelector(".view-mode") as HTMLElement;
+        const edit = container.querySelector(".edit-mode") as HTMLElement;
+
+        // 👉 Edit
+        document
+          .getElementById(`edit-${note.id}`)
+          ?.addEventListener("click", () => {
+            view.style.display = "none";
+            edit.style.display = "block";
+          });
+
+        // 👉 Cancel
+        document
+          .getElementById(`cancel-${note.id}`)
+          ?.addEventListener("click", () => {
+            edit.style.display = "none";
+            view.style.display = "block";
+          });
+
+        // 👉 Save
+        document
+          .getElementById(`save-${note.id}`)
+          ?.addEventListener("click", async () => {
+            const newTitle = (
+              document.getElementById(`title-${note.id}`) as HTMLInputElement
+            ).value;
+            const newContent = (
+              document.getElementById(
+                `content-${note.id}`,
+              ) as HTMLTextAreaElement
+            ).value;
+
+            await fetch(`https://localhost:xxxx/api/notes/${note.id}`, {
+              method: "PUT",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                id: note.id,
+                title: newTitle,
+                content: newContent,
+                latitude: note.latitude,
+                longitude: note.longitude,
+              }),
+            });
+
+            popup.remove(); // 关闭 popup
+            await loadMarkers();
+            await loadNotes();
+          });
+
+        // 👉 Delete
+        document
+          .getElementById(`delete-${note.id}`)
+          ?.addEventListener("click", async () => {
+            if (!confirm("Delete this note?")) return;
+
+            await deleteNote(note.id);
+            popup.remove();
+          });
+      });
 
       markersRef.current.push(marker);
       // 👇 保存到 map
@@ -104,15 +208,15 @@ const [selectedId, setSelectedId] = useState<number | null>(null);
     loadNotes();
     const map = new maplibregl.Map({
       container: mapContainer.current,
-      style: "https://demotiles.maplibre.org/style.json",
+      style: "https://tiles.openfreemap.org/styles/bright",
       center: [174.78, -41.28],
 
-      zoom: 10,
+      zoom: 12,
     });
 
     mapRef.current = map;
     // 👉 获取数据函数
-    
+
     const fetchNotes = async () => {
       const res = await fetch("https://localhost:44359/api/notes");
       const data = await res.json();
@@ -171,8 +275,7 @@ const [selectedId, setSelectedId] = useState<number | null>(null);
             <div
               key={note.id}
               style={{
-                background:
-                selectedId === note.id ? "#e6f2ff" : "white",
+                background: selectedId === note.id ? "#e6f2ff" : "white",
                 padding: "12px",
                 marginBottom: "10px",
                 borderRadius: "8px",
@@ -228,13 +331,13 @@ const [selectedId, setSelectedId] = useState<number | null>(null);
                       zoom: 14,
                     });
                     // 2️⃣ 打开 popup
-  setTimeout(() => {
-  const marker = markersMapRef.current[note.id];
-  marker?.togglePopup();
-}, 300);
+                    setTimeout(() => {
+                      const marker = markersMapRef.current[note.id];
+                      marker?.togglePopup();
+                    }, 300);
 
-  // 3️⃣ 高亮选中
-  setSelectedId(note.id);
+                    // 3️⃣ 高亮选中
+                    setSelectedId(note.id);
                   }}
                 >
                   Go
